@@ -29,6 +29,7 @@
   svg{display:block;width:100%;height:auto}
   .foot{margin-top:16px;color:var(--ink3);font-size:.78rem}
   .foot code{font-family:var(--mono)}
+  .h2{font-size:1.05rem;font-weight:640;letter-spacing:-.01em;margin:30px 0 4px}
   .prog{height:6px;background:var(--line);border-radius:4px;overflow:hidden;margin-top:8px;max-width:340px}
   .prog i{display:block;height:100%;background:var(--accent)}
 </style>
@@ -43,6 +44,13 @@
   <div class="stats" id="stats"></div>
   <div class="card"><svg id="chart" viewBox="0 0 900 460" role="img" aria-label="beta estimate against number of participants"></svg></div>
   <p class="foot" id="foot"></p>
+
+  <h2 class="h2">By proposition</h2>
+  <p class="sub">The same coefficient fitted within each proposition separately. Each participant
+     sees a given proposition at most once, so these are ordinary least squares with the document-set
+     fixed effects retained &mdash; &beta; is still identified from the randomised within-pair contrast.
+     Bars are 95%&nbsp;intervals; with roughly a tenth of the data behind each, they are wide.</p>
+  <div class="card"><svg id="props" viewBox="0 0 900 300" role="img" aria-label="beta by proposition"></svg></div>
 </div>
 
 <script>
@@ -126,10 +134,61 @@ function render(data) {
   svg.appendChild(el("circle", {cx: X(last.n), cy: Y(last.beta), r: 4.5,
     fill: "var(--accent)", stroke: "var(--panel)", "stroke-width": 2}));
 
+  renderProps(data.propositions || []);
+
   document.getElementById("foot").innerHTML =
     `${pts.length} fits, n = ${pts[0].n}–${last.n}. Model: ` +
     `<code>final ~ initial + summary stance + document set (fixed) + (1 | participant)</code>. ` +
     `Updated ${m.updated} UTC. Page refreshes every 5 minutes.`;
+}
+
+function renderProps(props) {
+  const svg = document.getElementById("props");
+  svg.innerHTML = "";
+  if (!props.length) return;
+  const rows = props.slice().sort((a, b) => b.beta - a.beta);
+  const rowH = 30, T = 16, B = 40, L = 330, R = 24;
+  const H = T + B + rows.length * rowH;
+  svg.setAttribute("viewBox", `0 0 900 ${H}`);
+  const lo = Math.min(0, ...rows.map(r => r.lo)), hi = Math.max(0, ...rows.map(r => r.hi));
+  const pad = (hi - lo) * 0.08 || 0.1;
+  const X = v => L + (v - (lo - pad)) / ((hi + pad) - (lo - pad)) * (900 - L - R);
+
+  // zero line
+  svg.appendChild(el("line", {x1: X(0), x2: X(0), y1: T - 6, y2: H - B + 6,
+    stroke: "var(--zero)", "stroke-width": 1.4, "stroke-dasharray": "5 4"}));
+
+  rows.forEach((r, i) => {
+    const y = T + i * rowH + rowH / 2;
+    const short = r.label.replace(/^The UK should /, "").replace(/\.$/, "");
+    const t = el("text", {x: L - 14, y: y + 4, "text-anchor": "end",
+      fill: "var(--ink2)", "font-size": 12.5});
+    t.textContent = short.length > 46 ? short.slice(0, 45) + "…" : short;
+    const title = el("title"); title.textContent =
+      `${r.label}  —  β ${r.beta.toFixed(3)} [${r.lo.toFixed(2)}, ${r.hi.toFixed(2)}], n=${r.n}`;
+    t.appendChild(title);
+    svg.appendChild(t);
+
+    svg.appendChild(el("line", {x1: X(r.lo), x2: X(r.hi), y1: y, y2: y,
+      stroke: "var(--accent)", "stroke-width": 2, opacity: .5, "stroke-linecap": "round"}));
+    svg.appendChild(el("circle", {cx: X(r.beta), cy: y, r: 4.5, fill: "var(--accent)"}));
+
+    const v = el("text", {x: 900 - R, y: y + 4, "text-anchor": "end",
+      fill: "var(--ink3)", "font-size": 11, "font-family": "var(--mono)"});
+    v.textContent = r.beta.toFixed(2); svg.appendChild(v);
+  });
+
+  // x axis
+  for (let i = 0; i <= 4; i++) {
+    const v = (lo - pad) + i * ((hi + pad) - (lo - pad)) / 4;
+    const t = el("text", {x: X(v), y: H - B + 26, "text-anchor": "middle",
+      fill: "var(--ink3)", "font-size": 11, "font-family": "var(--mono)"});
+    t.textContent = v.toFixed(2); svg.appendChild(t);
+  }
+  const xl = el("text", {x: (L + 900 - R) / 2, y: H - 8, "text-anchor": "middle",
+    fill: "var(--ink2)", "font-size": 12});
+  xl.textContent = "β  (points of final stance per point of summary stance)";
+  svg.appendChild(xl);
 }
 
 function load() {
